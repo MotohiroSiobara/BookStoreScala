@@ -1,69 +1,62 @@
 package controllers
 
-import ApiController._ // コンパニオンオブジェクトであるApiControllerを利用するため
+import ApiController._
 import play.api.mvc._
 import play.api.libs.json._
-
-object Type {
-  type genreType = List[Genre]
-}
-case class BookGenre(genres: Type.genreType)
-case class Genre(id: Int, name: String)
+import api.RakutenApi
+import models._
 
 class ApiController extends Controller {
-  def index = TODO //指定したジャンルに基づく技術書のリスト
+  def searchBooks = Action { implicit request =>
+    val queryString = request.queryString
+    println(queryString.getOrElse("page", None))
+    val genreId = queryString.get("genre_id").map(_.last.toInt)
+    val queryPage = queryString.get("page").map(_.last)
+    genreId match {
+      case Some(id) => Ok(genreSearchJson(id, queryPage))
+      case None => Ok(wrongParameterJson)
+    }
+  }
 
   def genres = Action { implicit request =>
     Ok(genresJson)
   }
+
+  private def genreSearchJson(id: Int, page: Option[String]):JsValue = {
+    val optionName: Option[String] = Book.getGenreName(id)
+    val json :JsValue = optionName match {
+      case Some(f) => Json.parse(new RakutenApi().search(optionName.get)(page))
+      case None    => notFoundDataJson
+    }
+
+    return json
+  }
 }
 
 object ApiController {
-  private val genresJson = Json.parse("""
-    {
-      "kind": "genres",
-       "items": [
-         {
-            "id": "1",
-            "name": "ruby"
-         },
-         {
-            "id": "2",
-            "name": "java"
-          },
-          {
-            "id": "3",
-            "name": "scala"
-          },
-          {
-            "id": "4",
-            "name": "python"
-          },
-          {
-            "id": "5",
-            "name": "javascript"
-          },
-          {
-            "id": "6",
-            "name": "php"
-          },
-          {
-            "id": "7",
-            "name": "html"
-          },
-          {
-            "id": "8",
-            "name": "css"
-          },
-          {
-            "id": "9",
-            "name": "C++"
-          },
-          {
-            "id": "10",
-            "name": "go"
-          }
-       ]
-    }
+  private val genresJson = Json.toJson(
+    Book.genres
+  )
+
+  private val badRequestJson:JsValue = Json.parse("""
+  {
+      "error": "Bad Request",
+      "message": "Not present with id"
+  }
   """)
+
+  private val wrongParameterJson:JsValue = Json.parse("""
+    {
+      "error": "wrong_parameter",
+      "error_description": "keyword parameter is not valid"
+    }
+    """)
+
+  private val notFoundDataJson:JsValue = Json.parse(
+    """
+      {
+        "error": "not_found",
+        "error_description": "not found"
+      }
+    """)
 }
